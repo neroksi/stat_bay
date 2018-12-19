@@ -1,1 +1,1 @@
-# Calculating posterior distributions and modal estimates in Markov mixture models 
+# Calculating posterior distributions and modal estimates in Markov mixture models, Chibs, 96
