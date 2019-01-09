@@ -32,8 +32,9 @@ def _Phi(y, **kwargs):
 
 
 def order(Y, S):
-    Y = np.sum(np.array(Y),1)
-    u = np.bincount(S, weights= Y)
+    Y = np.array(Y)
+    Y = np.sum(Y,1 if Y.ndim > 1 else None)
+    u = np.bincount(S, weights= Y if Y.ndim > 1 else None)
     v = np.bincount(S)
     r = np.argsort(u/v)
     d = S.copy()
