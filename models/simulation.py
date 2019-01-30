@@ -10,10 +10,12 @@ def simul_poisson(P, lambda_, size = 10): # Simulate an artificial poisson MMM
     y = []
     m = len(lambda_)
     S = []
+    s = np.random.choice(m)
     for t in range(size):
-        S.append(np.random.choice(m))
+        S.append(s)
         y.append(stats.poisson.rvs(mu = lambda_[S[-1]]))
-    return y,S
+        s = np.random.choice(m, p = P[s])
+    return np.array(y),np.array(S)
 
 
 
@@ -25,7 +27,7 @@ def simul_gauss(P, mu, sigma, size = 10):
     for t in range(size):
         S.append(s)
         y.append(stats.multivariate_normal.rvs( mean = mu[s], cov = sigma[s]) )
-        s = np.random.choice(m, p = P[S[-1]])
+        s = np.random.choice(m, p = P[s])
     return np.array(y), np.array(S)
 
 

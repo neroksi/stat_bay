@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[4]:
-
 #from copy import deepcopy
 
 class HMM(object):
@@ -90,7 +88,7 @@ class HMM(object):
             S = self.S
         if P is None :
              P = self.P
-        self.Theta = self.one_sample2(which = "tDictDist", Y = Y, S = S, P = P, Theta = self.Theta)
+        self.Theta = self.one_sample2(which = "tDictDist", Y = Y, S = S, P = P, Theta = Theta)
         self.P = self.one_sample2(which = "pDist", Y = Y, S = S, Theta = Theta)
         self.S = self.one_sample2(which = "sDist", Y = Y, P = P, Theta = Theta)
     
