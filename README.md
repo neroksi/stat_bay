@@ -1,7 +1,7 @@
 ﻿
-# Predicting pollution in China
+# Markov chain mixture with HMM (Chib 96)
 
-*Authors: Nicolas Toussaint, Alexis Saïr, Robin Fuchs, Ambroise Coulomb, Enzo Terreau, Antoine Hoorelbeke*
+*Authors: Marin Bouthemy, Kossi Neroma, Tangi Salaün and Nicolas Toussaint*
 
 ## Introduction
 This repository contains the implementation of the HMM algorithm describes in the [paper](https://econpapers.repec.org/article/eeeeconom/v_3a75_3ay_3a1996_3ai_3a1_3ap_3a79-97.htm) of Siddhartha Chib named "Calculating posterior distributions and modal estimates in Markov mixture models". You can find it [here](https://econpapers.repec.org/article/eeeeconom/v_3a75_3ay_3a1996_3ai_3a1_3ap_3a79-97.htm).
