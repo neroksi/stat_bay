@@ -1,34 +1,78 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
-
-
-import pandas as pd, numpy as np, scipy as sp, time
-from scipy import stats
-
-
-# In[2]:
-
+import pandas as pd, numpy as np
+from scipy import stats, linalg, special
+from sklearn import metrics
 
 def _poisson(y, _lambda): # Poisson cdf
-    return np.power(_lambda, y)*np.exp(-_lambda)/sp.special.factorial(y)
+    return np.power(_lambda, y[-1])*np.exp(-_lambda)/special.factorial(y[-1])
 
-def _poisson2(y, _lambda): # Poisson cdf
-    return stats.poisson.pmf(y, _lambda)
+# def _poisson2(y, _lambda): # Poisson cdf
+#     return stats.poisson.pmf(y[-1], _lambda)
 
+# def similarity(df, groups = ["S0", "S1"]):
+#     X = df.sort_values(groups)
+#     w = X.loc[:, ~X.columns.isin(groups)] - X.groupby(groups).transform("mean")
+#     w = 1/(1+w**2)
+#     w = w.sum(1)
+#     sims = pd.crosstab(X[groups[0]], X[groups[1]],w, aggfunc= "sum", normalize= "columns")
+#     mapto = []
+#     for i in sims.index:
+#         idxmax = sims.loc[i, ~sims.columns.isin(mapto)].idxmax(1)
+#         mapto.append(idxmax)
+#     return mapto
 
-# In[3]:
+# def similarity2(S0, S1, kmax = None):
+#     if kmax is None:
+#         kmax = max(S0.max(), S1.max()) +1
+#     L = np.empty((kmax,kmax)) 
 
+#     for i in range(kmax) :
+#         for j in range(kmax) :
+#             L[i,j] = metrics.cluster.adjusted_rand_score(S0 == i, S1==j)
+#     v = np.arange(kmax)
+#     c = list(range(kmax))
+#     mapto = []
+    
+#     for i in range(kmax) : # compute argmax and ensure that there is no duplicates
+#         idmax = np.argmax(L[~np.isin(v, mapto), i])
+#         mapto.append(c[idmax])
+#         c.pop(idmax)
+        
+#     return mapto
 
-def _Phi(y, **kwargs):
-    mu = kwargs["mu"] 
-    omega = np.linalg.inv(kwargs["omega_inv"])
-    v = np.array([stats.multivariate_normal.pdf(y,mean = mu[i], cov =  omega[i] ) for i in range(len(mu))])
-    return v
+def _Phi(y, mu, omega_inv, **kwargs):
+    """Compute the pdf of a multivariate normal dist.
+    
+    Parameters :
+    __________
+    y : 1-d array 
+        On sample of the observations. Must have a `d`
+        size, where `d`is  the observations' dimension.
 
+    mu : 2-d numpy array, Kxd
+        The mean of the K sub-populations.
+        `K` is the number of components and `d`
+        the observations' dimension.
 
-# In[4]:
+    omega_inv: 3-d numpy array, Kxdxd
+        The inverse of the sub-populations' covariance
+        matrix. `K` is the number of components and `d`
+        the observations' dimension.
+
+    **kwargs : any
+        Ignored.
+    """
+    y = y[-1]
+    mu = y -mu
+    trace = mu[:,None,:]@omega_inv
+    trace = trace[:,-1,:]*mu
+    trace = trace.sum(1)
+    det = np.linalg.det(omega_inv)
+    pdf_y = np.sqrt(det)*np.exp(-trace/2)#det and not 1/det
+                        # Since we are working with the inverse
+    return pdf_y/pdf_y.sum()
 
 
 def order(Y, S):
@@ -43,32 +87,33 @@ def order(Y, S):
         d[d == r[i]] = m + i +1
     return  d-m-1
 
+def replace(old_val, new_val, x):
+    order = np.arange(len(x))
+    dt = pd.DataFrame({"old":old_val, "new":new_val})
+    dt = dt.merge(pd.DataFrame({"x":x, "order":order}), left_on = "old", right_on = "x", how = "right")
+    u = ~dt.new.isnull()
+    dt.loc[u, "x"] = dt.new[u].values
+    return dt.sort_values("order").x.values
 
-# In[5]:
-
-
-def apply_by_group(x, g,axis = 0, func = np.sum):
+def apply_by_group(x, g,axis = 0, func = np.sum, gmax = None):
     o = np.argsort(g)
     g  =g[o]
     x = x[o]
-    indices = [0]
+    indices = [0]*(g[0] +1)
     for i in range(1, len(g)):
         if g[i-1] != g[i] :
-            indices.append(i)
+            for j in range(g[i-1], g[i]):
+                indices.append(i)
+    gmax = g.max() if gmax is None else gmax
+    for j in range(g[i], gmax):
+        indices.append(i)
     indices.append(i+1)
     
     res = [ func(x[indices[i-1]:indices[i] ], axis = axis) for i in range(1,len(indices))]
-    
-    return np.array(indices), np.array(res)
-def apply2(x,g):
-    df = pd.DataFrame(x)
-    df["g"] = g
-    res = df.groupby("g").sum()
-    return res
-
-
-# In[22]:
-
+    res = np.nan_to_num(res, copy = False)
+    if len(indices) != gmax +2 :
+        print(gmax,g, indices)
+    return np.array(indices), res
 
 def return_default_if_null(three_uples):
     d = {}
@@ -93,40 +138,9 @@ def set_default_if_null(obj , **kwargs):
             except:
                 obj[arg] = value
 
-            
-def set_attr(obj, **kwargs):
-    for arg, value in kwargs.items():
-        setattr(obj, arg, value)
-
-
-# In[23]:
-
-
-def bincount2D(a, weights = None):    
-    N = a.max()+1
-    a_offs = a + np.arange(a.shape[0])[:,None]*N
-    if weights is None :
-        return np.bincount(a_offs.ravel(), minlength=a.shape[0]*N).reshape(-1,N)
-    else :
-        return np.bincount(a_offs.ravel(), minlength=a.shape[0]*N, weights = weights.ravel()).reshape(-1,N)
-
-
-# In[24]:
-
-
-def _mean(x, axis = 0):
-    return np.mean(x[:,None,:],axis = axis)
-
-
-# In[25]:
-
-
-def _var2(x, axis = 0):
+def _var(x, axis = 0):
     x = x- x.mean(axis)
     return x.transpose()@x
-
-
-# In[26]:
 
 
 class dist(object):
@@ -150,9 +164,6 @@ class dist(object):
         return self._rvs(**self.params)
 
 
-# In[27]:
-
-
 class gamma(dist):
     def __init__(self,rvs = None, a = 1, scale = 1, a0 = 1, scale0 = 1):
         super().__init__(rvs)
@@ -163,9 +174,6 @@ class gamma(dist):
         u = np.bincount(S, weights= Y)
         v = np.bincount(S)
         self._set(a = self.default["a"] + u, scale = 1/(1/self.default["scale"] + v))
-
-
-# In[130]:
 
 
 class norm(dist):
@@ -190,8 +198,12 @@ class norm(dist):
        
             
     def update(self, Y, S, Theta = None, P = None) :
-        ind, nybar = apply_by_group( Y, S)
+        m = P.shape[1]
+        ind, nybar = apply_by_group( Y, S, gmax = m-1)
         N = ind[1:] - ind[:-1] 
+        
+        if len(N) != m :
+            raise ValueError(" %d = len(N) != m = %d, something went wrong"%(len(N), m))
         sigma_inv = self.default["sigma0_inv"] + Theta["omega_inv"]*N[:,None, None]
         sigma = np.linalg.inv(sigma_inv)
         mu_1 = self.default["sigma0_inv"]@self.default["mu0"][:,:,None]
@@ -199,9 +211,6 @@ class norm(dist):
         mu = mu_1 + mu_2
         mu = (sigma@mu)[:,:,-1]
         self._set(sigma = sigma, mu = mu)
-
-
-# In[131]:
 
 
 class wishart(dist):
@@ -226,8 +235,9 @@ class wishart(dist):
        
             
     def update(self, Y, S, Theta = None, P = None) :
-        ind, yvar = apply_by_group( Y , S, func= _var2)
-        ind, ymean = apply_by_group( Y , S, func= np.mean)
+        m = P.shape[1]
+        ind, yvar = apply_by_group( Y , S, func= _var, gmax = m-1 )
+        ind, ymean = apply_by_group( Y , S, func= np.mean, gmax = m-1)
         N = ind[1:] - ind[:-1]
         
         ymean = ymean - Theta["mu"]
@@ -240,17 +250,15 @@ class wishart(dist):
         self._set( nu = nu, omega = omega)
 
 
-# In[132]:
-
-
 class dirichlet(dist ):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        set_default_if_null(self, _rvs = stats.gamma.rvs, params = {"a":1 }, default = {"a":1 })
+        set_default_if_null(self, _rvs = stats.gamma.rvs,
+                                 params = {"a":1 }, default = {"a":1 })
 
     
     def update(self, Y= None, S= None, Theta = None, **kwargs) :
-        n = np.zeros(self.params["a"].shape)
+        n = np.zeros(self.default["a"].shape)
         tab = pd.crosstab(S[:-1], S[1:]) # transitions' count
         n[ :len(tab), tab.columns] = tab.values
         self._set(a = self.default["a"] + n )
@@ -258,9 +266,6 @@ class dirichlet(dist ):
     def rvs(self) :
         g = self._rvs(**self.params)
         return g/g.sum(1)[:, None]
-
-
-# In[133]:
 
 
 class simul_s(dist):
@@ -271,10 +276,13 @@ class simul_s(dist):
         self.P = None
         self.n = None
         self.m = None
+        self.S = None
+        self.first_S = True
+        self.t = 0
     
     def _init(self, P): # Compute the left eigenvector assocated with the eigenvalue 1
-        eigval, eigvect = sp.linalg.eig(P, left = True, right=  False)
-        p = eigvect[:, eigval.real.round(3) == 1.].reshape(-1)
+        eigval, eigvect = linalg.eig(P, left = True, right=  False)
+        p = eigvect[:, eigval.real.round(3) == 1.].reshape(-1).real
         p = p/p.sum()
         return p
         
@@ -291,16 +299,13 @@ class simul_s(dist):
     def update(self, Y= None, Theta={}, P= None, S = None): # Simulate the states
         n = len(Y)
         m = len(P)
-        
-        #print(n,m)
-
         F = np.zeros((n, m))
 
-        v = self.get_f2(Y[0], Theta = Theta)
+        v = self.get_f2(Y[:1], Theta = Theta)
         F[0] = self._init(P)*v
         F[0] = F[0]/F[0].sum()
         for i in range(1, n):
-            v = self.get_f2(Y[i], Theta = Theta)
+            v = self.get_f2(Y[:i+1], Theta = Theta)
             #print(v)
             
             F[i] = (F[i-1]@P)*v
@@ -310,9 +315,8 @@ class simul_s(dist):
         self.P = P
         self.n = n
         self.m = m
+        self.first_S = True
         
-        #self._rvs = order(Y,S)
-        #self._rvs = S
     def rvs(self):
         assert (not self.F is None) and (not self.P is None)
         S = np.zeros(self.n, dtype = int)
@@ -323,4 +327,10 @@ class simul_s(dist):
         for i in range(self.n-2, -1, -1):
             p = self.F[i]*self.P[:, S[i+1]]
             S[i] = np.random.choice(a = a , p = p/p.sum())
+        
+        
+        if self.first_S :
+            self.S = S
+            self.first_S = False
+        self.t += 1
         return order(self.Y,S)
