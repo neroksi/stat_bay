@@ -2,6 +2,7 @@
 # coding: utf-8
 
 #from copy import deepcopy
+from datetime import datetime
 
 class HMM(object):
     """A general class for Hidden Markov Models.
@@ -46,23 +47,30 @@ class HMM(object):
         self.P = P
         self.H = None
     
-    def one_sample(self, which = "tDist", Y = None, S= None, Theta = None, P = None):
-        """Deliver one sample of the `which` distribution"""
+    def _print(self, t0, t, niter, rounds) :
+        elapsed = (t - t0).total_seconds()/60
+        t = t.strftime("%Y-%m-%d  %H:%M:%S")
+        remain = rounds - niter
+        premain = int(100*(1 - niter/rounds))
         
-        xDist = getattr(self, which)
-        if isinstance(xDist, list):
-            rvs = []
-            for i in range(len(xDist)) :
-                d = xDist[i]
-                rvsd = {}
-                for key, value in d.items() :
-                    value.update(Y=Y, S=S, Theta = Theta[i] ,P=P)
-                    rvsd[key] = value.rvs()
-                rvs.append(rvsd)
-        else:
-            xDist.update(Y=Y, S=S, Theta = Theta,P=P)
-            rvs = xDist.rvs()
-        return rvs
+        print("Time : %s   Elapsed : %0.2f min.  N_iter : %04d   Remain : %04d   %%Remain : %02d%%"%(t,elapsed, niter, remain, premain))
+#     def one_sample(self, which = "tDist", Y = None, S= None, Theta = None, P = None):
+#         """Deliver one sample of the `which` distribution"""
+        
+#         xDist = getattr(self, which)
+#         if isinstance(xDist, list):
+#             rvs = []
+#             for i in range(len(xDist)) :
+#                 d = xDist[i]
+#                 rvsd = {}
+#                 for key, value in d.items() :
+#                     value.update(Y=Y, S=S, Theta = Theta[i] ,P=P)
+#                     rvsd[key] = value.rvs()
+#                 rvs.append(rvsd)
+#         else:
+#             xDist.update(Y=Y, S=S, Theta = Theta,P=P)
+#             rvs = xDist.rvs()
+#         return rvs
     
     def one_sample2(self, which = "tDist", Y = None, S = None, Theta = None, P = None):
         """Deliver one sample of the `which` distribution"""
@@ -92,9 +100,9 @@ class HMM(object):
         self.P = self.one_sample2(which = "pDist", Y = Y, S = S, Theta = Theta)
         self.S = self.one_sample2(which = "sDist", Y = Y, P = P, Theta = Theta)
     
-    def run(self, rounds = 10, historise = True):
+    def run(self, rounds = 10, historise = True, verbose = True):
         """Will run  and historicise all the Gibbs sampler steps."""
-
+        t0 = datetime.now()
         if historise :
             if self.H is None :
                 self.H  = {"Theta": [], "S": [], "P": []}
@@ -103,6 +111,10 @@ class HMM(object):
                 self.H["S"].append(self.S) #(deepcopy(self.S))
                 self.H["P"].append(self.P) #(deepcopy(self.P))
                 self.one_step(Y = self.Y , S = self.S, Theta = self.Theta)
+                if verbose and i%500 == 0:
+                    self._print(t0, datetime.now(), i, rounds)
         else :
             for i in range(rounds):
                 self.one_step(Y = self.Y , S = self.S, Theta = self.Theta)
+                if verbose and i%500 == 0 :
+                    self._print(t0, datetime.now(), i,rounds)
